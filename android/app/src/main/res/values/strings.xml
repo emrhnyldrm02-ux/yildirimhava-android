@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Yıldırım Hava</string>
+    <string name="title_activity_main">Yıldırım Hava</string>
+    <string name="package_name">com.yildirimhava.app</string>
+    <string name="custom_url_scheme">com.yildirimhava.app</string>
+</resources>

@@ -1,0 +1,1778 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Yıldırım Hava — Hava Durumu</title>
+<meta name="description" content="Canlı renkli, hava durumuna göre değişen animasyonlu hava durumu uygulaması. Anlık durum, saatlik ve 7 günlük tahmin, hava kalitesi, rüzgar, basınç, görüş mesafesi, anlık tarih ve saat.">
+<meta name="theme-color" content="#5B6FE0">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Yıldırım Hava">
+<meta property="og:title" content="Yıldırım Hava — Hava Durumu">
+<meta property="og:description" content="Canlı renkli, hava durumuna göre değişen animasyonlu hava durumu uygulaması.">
+<meta property="og:type" content="website">
+<style>
+  :root{
+    --ink:#ffffff;
+    --ink-dim:rgba(255,255,255,0.72);
+    --card-bg:rgba(255,255,255,0.11);
+    --card-border:rgba(255,255,255,0.2);
+    --card-shadow:rgba(10,8,30,0.22);
+    --accent:#E4B563;
+    --accent-2:#C97A63;
+    --good:#3DDC97;
+    --warn:#E4B563;
+    --serious:#D98A5C;
+    --critical:#D9707F;
+    --radius:22px;
+    --bounce:cubic-bezier(.3,1.15,.5,1);
+    --g-sun:linear-gradient(160deg,#7A4A45 0%,#A8724F 40%,#C79A5F 70%,#6E93AC 100%);
+    --g-cloud:linear-gradient(160deg,#454E77 0%,#5C6796 40%,#7686AE 72%,#9DAFC7 100%);
+    --g-rain:linear-gradient(160deg,#2E3260 0%,#3D4380 45%,#4F5896 75%,#6B76A8 100%);
+    --g-snow:linear-gradient(160deg,#37536C 0%,#4F7592 42%,#7BA0B4 72%,#B9D2DC 100%);
+    --g-storm:linear-gradient(160deg,#221933 0%,#3B2A52 45%,#553A6E 75%,#6F4E80 100%);
+    --g-fog:linear-gradient(160deg,#3E4452 0%,#565D6E 45%,#727A8C 75%,#9AA2AE 100%);
+    --g-night:linear-gradient(160deg,#0C0A22 0%,#1C1934 45%,#272148 75%,#312A57 100%);
+  }
+  *{box-sizing:border-box;}
+  html{ margin:0; padding:0; }
+  body{
+    margin:0;padding:0;
+    min-height:100vh;
+    position:relative;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    color:var(--ink);
+    background:var(--g-cloud);
+    transition:background 1.2s ease;
+  }
+  /* #bg-layer clips its own decorative children (clouds/rain/snow), so the
+     document itself never needs overflow-x:hidden — that combined with a
+     height:100% box turns <body> into its own scroll container, which breaks
+     window.scrollTo/anchor links/mobile scroll quirks. Keep html/body as normal
+     auto-height, document-scrolling boxes. */
+  body.weather-sun{ background:var(--g-sun); --accent:#FFD166; }
+  body.weather-cloud{ background:var(--g-cloud); --accent:#8FD3F4; }
+  body.weather-rain{ background:var(--g-rain); --accent:#8FE3FF; }
+  body.weather-snow{ background:var(--g-snow); --accent:#EAFBFF; }
+  body.weather-storm{ background:var(--g-storm); --accent:#D9B3FF; }
+  body.weather-fog{ background:var(--g-fog); --accent:#E2E8F2; }
+  body.time-night{ background:var(--g-night); --accent:#B69CFF; }
+
+  /* ---------- animated background layers ---------- */
+  #bg-layer{
+    position:fixed;inset:0;
+    overflow:hidden;
+    z-index:0;
+    pointer-events:none;
+  }
+  .star{
+    position:absolute;
+    width:3px;height:3px;
+    border-radius:50%;
+    opacity:0.7;
+    animation:twinkle 3.5s ease-in-out infinite;
+    box-shadow:0 0 6px 1px currentColor;
+  }
+  @keyframes twinkle{
+    0%,100%{opacity:0.2; transform:scale(0.8);}
+    50%{opacity:1; transform:scale(1.2);}
+  }
+  .shooting-star{
+    position:absolute;
+    width:70px; height:2px;
+    background:linear-gradient(90deg, #fff, rgba(255,255,255,0));
+    border-radius:2px;
+    opacity:0;
+    animation:shoot 7s ease-in infinite;
+    transform:rotate(18deg);
+  }
+  @keyframes shoot{
+    0%{opacity:0; transform:translateX(0) translateY(0) rotate(18deg);}
+    2%{opacity:1;}
+    12%{opacity:0; transform:translateX(-260px) translateY(140px) rotate(18deg);}
+    100%{opacity:0;}
+  }
+  .sun{
+    position:absolute;
+    top:8%;
+    right:12%;
+    width:130px;height:130px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 35%, #F2E2BA, #D9A75C 45%, rgba(217,167,92,0) 72%);
+    box-shadow:0 0 70px 20px rgba(217,167,92,0.25);
+    animation:pulse 5s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{transform:scale(1) rotate(0deg);}
+    50%{transform:scale(1.04) rotate(3deg);}
+  }
+  .moon{
+    position:absolute;
+    top:8%;
+    right:14%;
+    width:76px;height:76px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 35%, #EDE7F5, #A896C7 55%, rgba(168,150,199,0) 75%);
+    box-shadow:0 0 50px 16px rgba(150,130,190,0.22);
+    animation:pulse 6s ease-in-out infinite;
+  }
+  .cloud{
+    position:absolute;
+    background:rgba(255,255,255,0.75);
+    border-radius:50px;
+    box-shadow:0 10px 18px rgba(20,10,60,0.12);
+    animation-name:drift;
+    animation-timing-function:linear;
+    animation-iteration-count:infinite;
+  }
+  @keyframes drift{
+    from{transform:translateX(-20vw) translateY(0);}
+    50%{transform:translateX(50vw) translateY(-6px);}
+    to{transform:translateX(120vw) translateY(0);}
+  }
+  .raindrop{
+    position:absolute;
+    width:3px;
+    border-radius:2px;
+    background:linear-gradient(to bottom, rgba(143,227,255,0), #8FE3FF);
+    animation-name:fall;
+    animation-timing-function:linear;
+    animation-iteration-count:infinite;
+  }
+  @keyframes fall{
+    from{transform:translateY(-10vh) rotate(8deg);}
+    to{transform:translateY(110vh) rotate(8deg);}
+  }
+  .snowflake{
+    position:absolute;
+    color:#fff;
+    opacity:0.9;
+    animation-name:snowfall;
+    animation-timing-function:linear;
+    animation-iteration-count:infinite;
+  }
+  @keyframes snowfall{
+    0%{transform:translateY(-10vh) translateX(0) rotate(0deg);}
+    50%{transform:translateY(50vh) translateX(24px) rotate(160deg);}
+    100%{transform:translateY(110vh) translateX(0) rotate(320deg);}
+  }
+  .fogband{
+    position:absolute;
+    left:-20%;
+    width:140%;
+    height:64px;
+    background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.45) 50%, rgba(255,255,255,0) 100%);
+    filter:blur(6px);
+    animation-name:fogdrift;
+    animation-timing-function:ease-in-out;
+    animation-iteration-count:infinite;
+  }
+  @keyframes fogdrift{
+    0%{transform:translateX(-5%);}
+    50%{transform:translateX(5%);}
+    100%{transform:translateX(-5%);}
+  }
+  .bolt{ position:absolute; inset:0; background:rgba(217,179,255,0.0); }
+  .flash{ animation:flash 6s ease-in-out infinite; }
+  @keyframes flash{
+    0%,92%,100%{background:rgba(217,179,255,0);}
+    93%{background:rgba(217,179,255,0.55);}
+    94%{background:rgba(217,179,255,0.08);}
+    95%{background:rgba(217,179,255,0.5);}
+    96%{background:rgba(217,179,255,0);}
+  }
+
+  /* ---------- layout ---------- */
+  .wrap{
+    position:relative;
+    z-index:1;
+    max-width:920px;
+    margin:0 auto;
+    padding:20px 20px 60px;
+  }
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom:18px;
+  }
+  .logo{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-weight:700;
+    font-size:1.35rem;
+    letter-spacing:0.2px;
+    text-shadow:0 1px 3px rgba(0,0,0,0.14);
+  }
+  .logo svg{width:30px;height:30px;}
+
+  .header-controls{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+    flex:1;
+    justify-content:flex-end;
+  }
+
+  .search{
+    position:relative;
+    flex:1;
+    max-width:340px;
+    min-width:180px;
+  }
+  .search input{
+    width:100%;
+    padding:13px 46px 13px 18px;
+    border-radius:999px;
+    border:2px solid var(--card-border);
+    background:rgba(255,255,255,0.18);
+    color:var(--ink);
+    font-size:0.95rem;
+    font-weight:600;
+    outline:none;
+    backdrop-filter:blur(10px);
+    transition:background .2s, border-color .2s, transform .15s;
+  }
+  .search input::placeholder{color:var(--ink-dim);font-weight:500;}
+  .search input:focus{background:rgba(255,255,255,0.26);border-color:#fff;}
+  .search button{
+    position:absolute;
+    right:4px;top:4px;bottom:4px;
+    width:40px;
+    border:none;
+    border-radius:999px;
+    background:linear-gradient(135deg,var(--accent-2),var(--accent));
+    color:#2a1030;
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:transform .18s var(--bounce);
+    box-shadow:0 4px 12px rgba(20,10,50,0.25);
+  }
+  .search button svg path{ stroke:#2a1030; }
+  .search button:hover{transform:scale(1.04);}
+  .search button:active{transform:scale(0.92);}
+  .suggestions{
+    position:absolute;
+    top:calc(100% + 8px);
+    left:0;right:0;
+    background:rgba(35,20,70,0.94);
+    border:2px solid var(--card-border);
+    border-radius:20px;
+    overflow:hidden;
+    backdrop-filter:blur(12px);
+    z-index:5;
+    display:none;
+    box-shadow:0 14px 30px rgba(10,5,30,0.35);
+  }
+  .suggestions.open{display:block;}
+  .suggestions div{
+    padding:11px 18px;
+    font-size:0.9rem;
+    font-weight:600;
+    cursor:pointer;
+    border-bottom:1px solid rgba(255,255,255,0.08);
+  }
+  .suggestions div:last-child{border-bottom:none;}
+  .suggestions div:hover{background:rgba(255,255,255,0.1);}
+
+  .icon-btn{
+    width:42px;height:42px;
+    flex:0 0 auto;
+    border:2px solid var(--card-border);
+    background:rgba(255,255,255,0.16);
+    border-radius:999px;
+    color:var(--ink);
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:background .2s, transform .18s var(--bounce);
+  }
+  .icon-btn:hover{background:rgba(255,255,255,0.2); transform:scale(1.05) rotate(-3deg);}
+  .icon-btn:active{transform:scale(0.9);}
+  .icon-btn.loading svg{animation:spin 0.9s linear infinite;}
+
+  .unit-toggle{
+    display:flex;
+    border:2px solid var(--card-border);
+    background:rgba(255,255,255,0.16);
+    border-radius:999px;
+    overflow:hidden;
+    flex:0 0 auto;
+  }
+  .unit-toggle button{
+    border:none;
+    background:transparent;
+    color:var(--ink-dim);
+    padding:0 14px;
+    height:42px;
+    font-size:0.85rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:background .2s, color .2s;
+  }
+  .unit-toggle button.active{background:linear-gradient(135deg,var(--accent-2),var(--accent));color:#2a1030;}
+
+  .menu-wrap{ position:relative; flex:0 0 auto; }
+  .menu-dropdown{
+    position:absolute;
+    top:calc(100% + 8px);
+    right:0;
+    min-width:190px;
+    background:rgba(35,20,70,0.94);
+    border:2px solid var(--card-border);
+    border-radius:18px;
+    overflow:hidden;
+    backdrop-filter:blur(12px);
+    z-index:20;
+    display:none;
+    box-shadow:0 14px 30px rgba(10,5,30,0.35);
+  }
+  .menu-dropdown.open{display:block;}
+  .menu-dropdown a{
+    display:block;
+    padding:12px 18px;
+    font-size:0.88rem;
+    font-weight:600;
+    color:var(--ink);
+    text-decoration:none;
+    border-bottom:1px solid rgba(255,255,255,0.08);
+    transition:background .15s;
+  }
+  .menu-dropdown a:last-child{border-bottom:none;}
+  .menu-dropdown a:hover{background:rgba(255,255,255,0.1);}
+
+  /* favorites */
+  .favorites{
+    display:flex;
+    gap:8px;
+    overflow-x:auto;
+    padding:2px 2px 14px;
+    scrollbar-width:thin;
+  }
+  .fav-chip{
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding:9px 14px;
+    border-radius:999px;
+    border:2px solid var(--card-border);
+    background:rgba(255,255,255,0.14);
+    font-size:0.85rem;
+    font-weight:700;
+    cursor:pointer;
+    white-space:nowrap;
+    transition:background .2s, transform .18s var(--bounce);
+  }
+  .fav-chip:hover{background:rgba(255,255,255,0.18); transform:translateY(-1px);}
+  .fav-chip.active{background:linear-gradient(135deg,var(--accent-2),var(--accent));border-color:transparent;color:#2a1030;}
+  .fav-chip .fav-remove{
+    opacity:0.7;
+    font-size:0.75rem;
+    padding:2px;
+    border-radius:50%;
+  }
+  .fav-chip .fav-remove:hover{opacity:1;background:rgba(0,0,0,0.15);}
+  .fav-add{
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding:9px 16px;
+    border-radius:999px;
+    border:2px dashed var(--card-border);
+    background:transparent;
+    color:var(--ink-dim);
+    font-size:0.85rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:transform .18s var(--bounce), border-color .2s, color .2s;
+  }
+  .fav-add:hover{color:var(--ink);border-color:#fff; transform:translateY(-1px);}
+  .fav-add[disabled]{opacity:0.5;cursor:default;}
+
+  .card{
+    background:var(--card-bg);
+    border:2px solid var(--card-border);
+    border-radius:var(--radius);
+    backdrop-filter:blur(16px);
+    -webkit-backdrop-filter:blur(16px);
+    box-shadow:0 14px 34px var(--card-shadow);
+    transition:transform .25s var(--bounce), box-shadow .25s ease;
+  }
+
+  .status{
+    text-align:center;
+    padding:60px 20px;
+    color:var(--ink-dim);
+    font-weight:600;
+  }
+  .status.error{color:#fff0f2;}
+  .spinner{
+    width:36px;height:36px;
+    margin:0 auto 14px;
+    border-radius:50%;
+    border:4px solid rgba(255,255,255,0.25);
+    border-top-color:var(--accent);
+    animation:spin 0.9s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .current{
+    padding:34px 28px;
+    margin-bottom:22px;
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:space-between;
+    gap:20px;
+    position:relative;
+  }
+  .current .place{
+    font-size:1.4rem;
+    font-weight:700;
+    text-shadow:0 1px 3px rgba(0,0,0,0.12);
+  }
+  .current .place small{
+    display:block;
+    font-weight:600;
+    font-size:0.85rem;
+    color:var(--ink-dim);
+    margin-top:4px;
+  }
+  .current .temp-block{
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  .weather-icon{width:76px;height:76px;flex-shrink:0; filter:drop-shadow(0 8px 14px rgba(20,10,50,0.25));}
+  .temp-big{
+    font-size:3.6rem;
+    font-weight:700;
+    line-height:1;
+    font-variant-numeric:proportional-nums;
+    text-shadow:0 1px 4px rgba(0,0,0,0.15);
+  }
+  .desc{
+    font-size:1rem;
+    font-weight:600;
+    color:var(--ink-dim);
+    margin-top:6px;
+  }
+  .meta-row{
+    display:flex;
+    gap:26px;
+    flex-wrap:wrap;
+  }
+  .meta-item{
+    text-align:center;
+  }
+  .meta-item .val{font-size:1.15rem;font-weight:700;}
+  .meta-item .lbl{font-size:0.75rem;font-weight:600;color:var(--ink-dim);margin-top:2px;}
+
+  .section-title{
+    font-size:0.92rem;
+    font-weight:700;
+    color:var(--ink);
+    margin:26px 4px 10px;
+    text-transform:uppercase;
+    letter-spacing:0.6px;
+    text-shadow:0 1px 3px rgba(0,0,0,0.12);
+  }
+
+  /* sun/aqi row */
+  .info-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:10px;
+  }
+  .info-tile{
+    padding:16px 18px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .info-tile .info-icon{width:30px;height:30px;flex-shrink:0;}
+  .info-tile .info-label{font-size:0.72rem;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:0.4px;}
+  .info-tile .info-value{font-size:1.08rem;font-weight:700;margin-top:2px;}
+  .aqi-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;}
+
+  /* hourly chart */
+  .chart-card{padding:18px 16px 10px;position:relative;}
+  .chart-wrap{position:relative;}
+  .chart-tooltip{
+    position:absolute;
+    pointer-events:none;
+    background:rgba(35,20,70,0.96);
+    border:2px solid var(--card-border);
+    border-radius:12px;
+    padding:6px 10px;
+    font-size:0.78rem;
+    white-space:nowrap;
+    transform:translate(-50%,-120%);
+    opacity:0;
+    transition:opacity .1s;
+    z-index:3;
+  }
+  .chart-tooltip.visible{opacity:1;}
+  .chart-tooltip .tt-val{font-weight:700;font-size:0.9rem;}
+  .chart-tooltip .tt-lbl{color:var(--ink-dim);}
+
+  .hourly{
+    padding:18px 12px;
+    display:flex;
+    gap:6px;
+    overflow-x:auto;
+    scrollbar-width:thin;
+  }
+  .hour-item{
+    flex:0 0 auto;
+    width:78px;
+    text-align:center;
+    padding:12px 6px;
+    border-radius:18px;
+  }
+  .hour-item .h-time{font-size:0.78rem;font-weight:700;color:var(--ink-dim);}
+  .hour-item .h-icon{width:32px;height:32px;margin:6px auto;}
+  .hour-item .h-temp{font-weight:700;font-size:0.95rem;}
+
+  .daily{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    padding:8px 8px;
+  }
+  .day-item{
+    display:grid;
+    grid-template-columns:96px 40px 1fr;
+    align-items:center;
+    gap:12px;
+    padding:12px 14px;
+    border-radius:18px;
+  }
+  .day-item:hover{background:rgba(255,255,255,0.12);}
+  .day-item .d-name{font-size:0.92rem;font-weight:700;}
+  .day-item .d-name small{display:block;color:var(--ink-dim);font-size:0.75rem;font-weight:600;}
+  .day-item .d-icon{width:30px;height:30px;}
+  .day-item .d-temps{
+    font-size:0.9rem;
+    font-weight:700;
+    white-space:nowrap;
+    text-align:right;
+    font-variant-numeric:tabular-nums;
+  }
+  .day-item .d-temps .lo{color:var(--ink-dim);margin-right:6px;}
+
+  /* ad slots */
+  .ad-slot{
+    margin:22px 0;
+    border:2px dashed rgba(255,255,255,0.35);
+    border-radius:18px;
+    background:rgba(255,255,255,0.06);
+    color:var(--ink-dim);
+    font-size:0.72rem;
+    font-weight:700;
+    text-align:center;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    letter-spacing:0.3px;
+  }
+  .ad-slot.ad-banner{min-height:90px;}
+  .ad-slot.ad-infeed{min-height:250px;}
+
+  /* install banner */
+  .install-banner{
+    position:fixed;
+    left:16px;right:16px;bottom:16px;
+    max-width:520px;
+    margin:0 auto;
+    background:rgba(35,20,70,0.96);
+    border:2px solid var(--card-border);
+    border-radius:20px;
+    padding:14px 16px;
+    display:none;
+    align-items:center;
+    gap:12px;
+    z-index:20;
+    backdrop-filter:blur(12px);
+    box-shadow:0 14px 34px rgba(10,5,30,0.4);
+  }
+  .install-banner.show{display:flex;}
+  .install-banner .install-text{flex:1;font-size:0.85rem;font-weight:600;line-height:1.35;}
+  .install-banner button{
+    border:none;border-radius:999px;
+    padding:10px 16px;
+    font-size:0.82rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:transform .18s var(--bounce);
+  }
+  .install-banner button:hover{transform:scale(1.03);}
+  .install-banner .btn-install{background:linear-gradient(135deg,var(--accent-2),var(--accent));color:#2a1030;}
+  .install-banner .btn-dismiss{background:transparent;color:var(--ink-dim);}
+
+  footer{
+    text-align:center;
+    color:var(--ink-dim);
+    font-size:0.78rem;
+    font-weight:600;
+    margin-top:36px;
+    line-height:1.8;
+  }
+  footer a{color:var(--ink-dim);}
+
+  .top-banner{
+    background:rgba(255,209,102,0.2);
+    border:2px solid rgba(255,209,102,0.5);
+    color:#fff3d6;
+    padding:10px 14px;
+    border-radius:16px;
+    font-size:0.82rem;
+    font-weight:600;
+    margin-bottom:16px;
+    line-height:1.4;
+  }
+
+  @media (max-width:560px){
+    .current{padding:26px 18px;}
+    .temp-big{font-size:2.7rem;}
+    .weather-icon{width:58px;height:58px;}
+    .day-item{grid-template-columns:76px 30px 1fr;padding:10px;}
+    .header-controls{width:100%;justify-content:space-between;}
+    .search{max-width:none;}
+  }
+
+  /* ---------- entrance animation ---------- */
+  .fade-up{ animation:fadeUp .5s var(--bounce) both; }
+  @keyframes fadeUp{
+    from{opacity:0; transform:translateY(10px);}
+    to{opacity:1; transform:translateY(0);}
+  }
+  .hour-item, .day-item{ transition:background .2s, transform .2s var(--bounce); }
+  .hour-item:hover, .day-item:hover{ transform:translateY(-2px); }
+  .card:hover{ transform:translateY(-1px); }
+
+  /* ---------- skeleton loading ---------- */
+  .skeleton{ animation:fadeUp .4s ease both; }
+  .skel-block{
+    background:linear-gradient(100deg, rgba(255,255,255,0.1) 30%, rgba(255,255,255,0.28) 50%, rgba(255,255,255,0.1) 70%);
+    background-size:200% 100%;
+    animation:shimmer 1.6s ease-in-out infinite;
+    border-radius:var(--radius);
+  }
+  @keyframes shimmer{
+    0%{background-position:200% 0;}
+    100%{background-position:-200% 0;}
+  }
+  .skel-current{ height:150px; margin-bottom:22px; }
+  .skel-row{ display:flex; gap:10px; margin-bottom:10px; }
+  .skel-row .skel-block{ flex:1; height:78px; }
+  .skel-tall{ height:200px; margin-bottom:16px; }
+
+  /* ---------- weather icon micro-motion ---------- */
+  .weather-icon.ic-sun svg, .h-icon.ic-sun svg, .d-icon.ic-sun svg{ animation:iconSpin 14s linear infinite; transform-origin:center; }
+  .weather-icon.ic-cloud svg, .h-icon.ic-cloud svg, .d-icon.ic-cloud svg,
+  .weather-icon.ic-sun-cloud svg, .h-icon.ic-sun-cloud svg, .d-icon.ic-sun-cloud svg,
+  .weather-icon.ic-moon svg, .h-icon.ic-moon svg, .d-icon.ic-moon svg,
+  .weather-icon.ic-snow svg, .h-icon.ic-snow svg, .d-icon.ic-snow svg{ animation:iconFloat 3.4s ease-in-out infinite; }
+  .weather-icon.ic-rain svg, .h-icon.ic-rain svg, .d-icon.ic-rain svg,
+  .weather-icon.ic-drizzle svg, .h-icon.ic-drizzle svg, .d-icon.ic-drizzle svg{ animation:iconBob 1.3s ease-in-out infinite; }
+  .weather-icon.ic-storm svg, .h-icon.ic-storm svg, .d-icon.ic-storm svg{ animation:iconWobble 2.4s ease-in-out infinite; }
+  @keyframes iconSpin{ from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+  @keyframes iconFloat{ 0%,100%{transform:translateY(0) rotate(0deg);} 50%{transform:translateY(-4px) rotate(-3deg);} }
+  @keyframes iconBob{ 0%,100%{transform:translateY(0);} 50%{transform:translateY(3px);} }
+  @keyframes iconWobble{ 0%,100%{transform:rotate(-4deg);} 50%{transform:rotate(4deg);} }
+
+  /* ---------- wind compass ---------- */
+  .wind-val{ display:flex; align-items:center; justify-content:center; gap:4px; }
+  .wind-arrow{ display:inline-block; transition:transform .4s ease; }
+
+  /* ---------- sun arc ---------- */
+  .datetime-card{
+    margin-top:14px;
+    padding:20px 24px;
+    text-align:center;
+  }
+  .dt-time{
+    font-size:2.4rem;
+    font-weight:700;
+    line-height:1;
+    font-variant-numeric:tabular-nums;
+    text-shadow:0 1px 4px rgba(0,0,0,0.15);
+  }
+  .dt-date{
+    font-size:0.9rem;
+    font-weight:600;
+    color:var(--ink-dim);
+    margin-top:6px;
+    text-transform:capitalize;
+  }
+
+  /* ---------- header actions on current card ---------- */
+  .current-top{ position:absolute; top:14px; right:16px; display:flex; align-items:center; gap:8px; }
+  .refresh-btn{ width:34px;height:34px;border-radius:999px; }
+  .refresh-btn.spinning svg{ animation:spin 0.8s linear infinite; }
+  .updated-text{ font-size:0.7rem; font-weight:600; color:var(--ink-dim); white-space:nowrap; }
+
+  /* ---------- retry ---------- */
+  .retry-btn{
+    margin-top:14px;
+    border:2px solid var(--card-border);
+    background:linear-gradient(135deg,var(--accent-2),var(--accent));
+    color:#2a1030;
+    padding:10px 20px;
+    border-radius:999px;
+    cursor:pointer;
+    font-size:0.85rem;
+    font-weight:700;
+    transition:transform .18s var(--bounce);
+  }
+  .retry-btn:hover{ transform:scale(1.03); }
+
+  /* ---------- recent searches ---------- */
+  .suggestions .sugg-heading{
+    padding:9px 18px 4px;
+    font-size:0.66rem;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    color:var(--ink-dim);
+    cursor:default;
+  }
+</style>
+</head>
+<body class="weather-cloud">
+  <div id="bg-layer"></div>
+
+  <div class="wrap">
+    <header>
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 17a4 4 0 1 1 1.2-7.82A5.5 5.5 0 0 1 17.9 11H18a3.5 3.5 0 0 1 0 7H6a3 3 0 0 1 0-6z" fill="#eaf3ff" opacity="0.92"/>
+          <path d="M14.2 8.2 L9.6 15.2 L12.6 15.2 L10.6 20 L16.4 13.4 L13.3 13.4 L14.9 10.1 Z" fill="#E4B563" stroke="#2A1F45" stroke-width="0.6" stroke-linejoin="round"/>
+        </svg>
+        <span>Yıldırım Hava</span>
+      </div>
+      <div class="header-controls">
+        <div class="search">
+          <input id="cityInput" type="text" placeholder="Şehir ara…" autocomplete="off">
+          <button id="searchBtn" aria-label="Ara">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 21l-4.3-4.3m1.8-5.2a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <div class="suggestions" id="suggestions"></div>
+        </div>
+        <button class="icon-btn" id="geoBtn" aria-label="Konumumu bul" title="Konumumu bul">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#eaf3ff" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="#eaf3ff" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <div class="unit-toggle" id="unitToggle">
+          <button data-unit="metric" class="active">°C</button>
+          <button data-unit="imperial">°F</button>
+        </div>
+        <div class="menu-wrap" id="menuWrap">
+          <button class="icon-btn" id="menuBtn" aria-label="Menü" aria-haspopup="true" aria-expanded="false" title="Menü">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.9" fill="#eaf3ff"/><circle cx="12" cy="12" r="1.9" fill="#eaf3ff"/><circle cx="12" cy="19" r="1.9" fill="#eaf3ff"/></svg>
+          </button>
+          <div class="menu-dropdown" id="menuDropdown">
+            <a href="about.html">Hakkında</a>
+            <a href="privacy.html">Gizlilik</a>
+            <a href="terms.html">Kullanım Şartları</a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="favorites" id="favorites"></div>
+
+    <div class="ad-slot ad-banner" id="ad-slot-top">
+      <!-- AdSense onayı sonrası: bu div'in içine <ins class="adsbygoogle">...</ins> kodunu yapıştırın -->
+      Reklam Alanı
+    </div>
+
+    <div id="app">
+      <div class="status" id="statusBox">
+        <div class="spinner"></div>
+        <div>Konum bilgisi yükleniyor…</div>
+      </div>
+    </div>
+
+    <div class="install-banner" id="installBanner">
+      <div class="install-text">Yıldırım Hava'yı ana ekranına ekleyip uygulama gibi kullanabilirsin.</div>
+      <button class="btn-dismiss" id="installDismiss">Kapat</button>
+      <button class="btn-install" id="installBtn">Yükle</button>
+    </div>
+
+    <footer>
+      Veriler Open-Meteo üzerinden alınmaktadır · Yıldırım Hava
+    </footer>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  var els = {
+    bgLayer: document.getElementById('bg-layer'),
+    body: document.body,
+    app: document.getElementById('app'),
+    input: document.getElementById('cityInput'),
+    searchBtn: document.getElementById('searchBtn'),
+    suggestions: document.getElementById('suggestions'),
+    favorites: document.getElementById('favorites'),
+    geoBtn: document.getElementById('geoBtn'),
+    unitToggle: document.getElementById('unitToggle'),
+    menuBtn: document.getElementById('menuBtn'),
+    menuDropdown: document.getElementById('menuDropdown'),
+    installBanner: document.getElementById('installBanner'),
+    installBtn: document.getElementById('installBtn'),
+    installDismiss: document.getElementById('installDismiss')
+  };
+
+  var WMO = {
+    0:  {tr:'Açık', icon:'sun'},
+    1:  {tr:'Genelde açık', icon:'sun-cloud'},
+    2:  {tr:'Parçalı bulutlu', icon:'sun-cloud'},
+    3:  {tr:'Kapalı', icon:'cloud'},
+    45: {tr:'Sisli', icon:'fog'},
+    48: {tr:'Kırağı sisi', icon:'fog'},
+    51: {tr:'Hafif çisenti', icon:'drizzle'},
+    53: {tr:'Çisenti', icon:'drizzle'},
+    55: {tr:'Yoğun çisenti', icon:'drizzle'},
+    56: {tr:'Dondurucu çisenti', icon:'drizzle'},
+    57: {tr:'Yoğun dondurucu çisenti', icon:'drizzle'},
+    61: {tr:'Hafif yağmur', icon:'rain'},
+    63: {tr:'Yağmurlu', icon:'rain'},
+    65: {tr:'Şiddetli yağmur', icon:'rain'},
+    66: {tr:'Dondurucu yağmur', icon:'rain'},
+    67: {tr:'Şiddetli dondurucu yağmur', icon:'rain'},
+    71: {tr:'Hafif kar', icon:'snow'},
+    73: {tr:'Kar yağışlı', icon:'snow'},
+    75: {tr:'Yoğun kar yağışı', icon:'snow'},
+    77: {tr:'Kar taneleri', icon:'snow'},
+    80: {tr:'Hafif sağanak', icon:'rain'},
+    81: {tr:'Sağanak yağmur', icon:'rain'},
+    82: {tr:'Şiddetli sağanak', icon:'rain'},
+    85: {tr:'Hafif kar sağanağı', icon:'snow'},
+    86: {tr:'Yoğun kar sağanağı', icon:'snow'},
+    95: {tr:'Gök gürültülü fırtına', icon:'storm'},
+    96: {tr:'Dolu ile fırtına', icon:'storm'},
+    99: {tr:'Şiddetli dolu fırtınası', icon:'storm'}
+  };
+
+  var DAY_NAMES = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+  var MONTHS = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+
+  function wmoInfo(code){ return WMO[code] || {tr:'Bilinmiyor', icon:'cloud'}; }
+
+  function resolveIcon(baseIcon, isDay){
+    if(isDay === 0){
+      if(baseIcon === 'sun') return 'moon';
+      if(baseIcon === 'sun-cloud') return 'cloud';
+    }
+    return baseIcon;
+  }
+
+  var ICON_DEF_ID = 0;
+  function iconSVG(kind, size){
+    size = size || 48;
+    var s = size;
+    var uid = 'g'+(ICON_DEF_ID++);
+    var common = 'width="'+s+'" height="'+s+'" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"';
+    var defs = '<defs>' +
+      '<radialGradient id="'+uid+'sun" cx="35%" cy="30%" r="70%"><stop offset="0%" stop-color="#FFF3B0"/><stop offset="55%" stop-color="#FFD166"/><stop offset="100%" stop-color="#FF9F5A"/></radialGradient>' +
+      '<linearGradient id="'+uid+'cloud" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="100%" stop-color="#D6E4FF"/></linearGradient>' +
+      '<linearGradient id="'+uid+'cloud2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#C9D6F5"/><stop offset="100%" stop-color="#9FB3E8"/></linearGradient>' +
+      '<linearGradient id="'+uid+'moon" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#F5EEFF"/><stop offset="100%" stop-color="#C8B6FF"/></linearGradient>' +
+      '<linearGradient id="'+uid+'bolt" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FFE38A"/><stop offset="100%" stop-color="#FF9F5A"/></linearGradient>' +
+      '</defs>';
+    switch(kind){
+      case 'sun':
+        return '<svg '+common+'>'+defs+'<g stroke="#FFB454" stroke-width="3.4" stroke-linecap="round">' +
+          '<line x1="32" y1="2" x2="32" y2="11"/><line x1="32" y1="53" x2="32" y2="62"/>' +
+          '<line x1="2" y1="32" x2="11" y2="32"/><line x1="53" y1="32" x2="62" y2="32"/>' +
+          '<line x1="10" y1="10" x2="16.5" y2="16.5"/><line x1="47.5" y1="47.5" x2="54" y2="54"/>' +
+          '<line x1="10" y1="54" x2="16.5" y2="47.5"/><line x1="47.5" y1="16.5" x2="54" y2="10"/></g>' +
+          '<circle cx="32" cy="32" r="15" fill="url(#'+uid+'sun)"/></svg>';
+      case 'moon':
+        return '<svg '+common+'>'+defs+'<path d="M40 8a24 24 0 1 0 16 40A20 20 0 0 1 40 8z" fill="url(#'+uid+'moon)"/>' +
+          '<circle cx="34" cy="30" r="2.6" fill="#B69CFF" opacity="0.55"/><circle cx="44" cy="42" r="1.8" fill="#B69CFF" opacity="0.5"/></svg>';
+      case 'sun-cloud':
+        return '<svg '+common+'>'+defs+'<circle cx="23" cy="22" r="11" fill="url(#'+uid+'sun)"/>' +
+          '<path d="M17 47a10.5 10.5 0 0 1 4.2-20 14 14 0 0 1 26.8 3.2A9.5 9.5 0 0 1 46 47H17z" fill="url(#'+uid+'cloud)"/></svg>';
+      case 'cloud':
+        return '<svg '+common+'>'+defs+'<path d="M12 44a12 12 0 0 1 3.6-23.4A15 15 0 0 1 45 22a10.5 10.5 0 0 1-1 22H12z" fill="url(#'+uid+'cloud2)"/>' +
+          '<path d="M8 47a10 10 0 0 1 4.4-19 13 13 0 0 1 25 2.6A9 9 0 0 1 39 48H8z" fill="url(#'+uid+'cloud)"/></svg>';
+      case 'fog':
+        return '<svg '+common+'>'+defs+'<path d="M12 22a10 10 0 0 1 4-18A13 13 0 0 1 41 6a9 9 0 0 1-2 16H12z" fill="url(#'+uid+'cloud)" opacity="0.9"/>' +
+          '<g stroke="#EAF0FF" stroke-width="4.5" stroke-linecap="round" opacity="0.9">' +
+          '<line x1="8" y1="32" x2="56" y2="32"/><line x1="14" y1="42" x2="50" y2="42"/>' +
+          '<line x1="8" y1="52" x2="56" y2="52"/></g></svg>';
+      case 'drizzle':
+        return '<svg '+common+'>'+defs+'<path d="M12 32a10.5 10.5 0 0 1 4.2-20A14 14 0 0 1 43 15a9.5 9.5 0 0 1-1 21H12z" fill="url(#'+uid+'cloud)"/>' +
+          '<g stroke="#5FC9F5" stroke-width="3.4" stroke-linecap="round"><line x1="20" y1="40" x2="17" y2="49"/><line x1="32" y1="40" x2="29" y2="49"/><line x1="44" y1="40" x2="41" y2="49"/></g></svg>';
+      case 'rain':
+        return '<svg '+common+'>'+defs+'<path d="M12 30a10.5 10.5 0 0 1 4.2-20A14 14 0 0 1 43 13a9.5 9.5 0 0 1-1 21H12z" fill="url(#'+uid+'cloud2)"/>' +
+          '<g stroke="#3FA9F5" stroke-width="4" stroke-linecap="round"><line x1="18" y1="38" x2="13" y2="52"/><line x1="32" y1="38" x2="27" y2="52"/><line x1="46" y1="38" x2="41" y2="52"/></g></svg>';
+      case 'snow':
+        return '<svg '+common+'>'+defs+'<path d="M12 28a10.5 10.5 0 0 1 4.2-20A14 14 0 0 1 43 11a9.5 9.5 0 0 1-1 21H12z" fill="url(#'+uid+'cloud)"/>' +
+          '<g fill="#8FE3FF"><circle cx="18" cy="46" r="2.8"/><circle cx="32" cy="51" r="2.8"/><circle cx="46" cy="46" r="2.8"/><circle cx="25" cy="38" r="1.8" opacity="0.7"/><circle cx="39" cy="38" r="1.8" opacity="0.7"/></g></svg>';
+      case 'storm':
+        return '<svg '+common+'>'+defs+'<path d="M12 26a10.5 10.5 0 0 1 4.2-20A14 14 0 0 1 43 9a9.5 9.5 0 0 1-1 21H12z" fill="url(#'+uid+'cloud2)"/>' +
+          '<polygon points="34,30 22,48 29,48 24,60 44,38 35,38" fill="url(#'+uid+'bolt)"/></svg>';
+      default:
+        return '<svg '+common+'>'+defs+'<circle cx="32" cy="32" r="17" fill="url(#'+uid+'cloud)"/></svg>';
+    }
+  }
+
+  function esc(s){
+    var d = document.createElement('div');
+    d.textContent = s == null ? '' : s;
+    return d.innerHTML;
+  }
+
+  // ================= units & prefs =================
+  var PREFS_KEY = 'gokyuzu_prefs_v1';
+  var FAV_KEY = 'gokyuzu_favorites_v1';
+
+  function loadPrefs(){
+    try{
+      var raw = localStorage.getItem(PREFS_KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return { unit: 'metric' };
+  }
+  function savePrefs(p){
+    try{ localStorage.setItem(PREFS_KEY, JSON.stringify(p)); }catch(e){}
+  }
+  var prefs = loadPrefs();
+
+  function loadFavorites(){
+    try{
+      var raw = localStorage.getItem(FAV_KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return [];
+  }
+  function saveFavorites(list){
+    try{ localStorage.setItem(FAV_KEY, JSON.stringify(list)); }catch(e){}
+  }
+  var favorites = loadFavorites();
+
+  var RECENT_KEY = 'gokyuzu_recent_v1';
+  function loadRecent(){
+    try{
+      var raw = localStorage.getItem(RECENT_KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return [];
+  }
+  function saveRecent(list){
+    try{ localStorage.setItem(RECENT_KEY, JSON.stringify(list)); }catch(e){}
+  }
+  var recentSearches = loadRecent();
+  function pushRecent(place){
+    var key = placeKey(place);
+    recentSearches = recentSearches.filter(function(p){ return placeKey(p) !== key; });
+    recentSearches.unshift(place);
+    if(recentSearches.length > 5) recentSearches = recentSearches.slice(0,5);
+    saveRecent(recentSearches);
+  }
+
+  function placeKey(p){
+    return (p.name||'').toLowerCase()+'|'+Math.round(p.latitude*10)+'|'+Math.round(p.longitude*10);
+  }
+
+  function cToF(c){ return c*9/5+32; }
+  function fmtTemp(c){
+    var v = prefs.unit === 'imperial' ? cToF(c) : c;
+    return Math.round(v) + '°';
+  }
+  function fmtWind(kmh){
+    if(prefs.unit === 'imperial'){
+      return Math.round(kmh*0.621371) + ' mph';
+    }
+    return Math.round(kmh) + ' km/s';
+  }
+
+  var WIND_LABELS = ['K','KKD','KD','DKD','D','DGD','GD','GGD','G','GGB','GB','BGB','B','BKB','KB','KKB'];
+  function windDirLabel(deg){
+    if(deg == null || isNaN(deg)) return '';
+    var idx = Math.round(((deg % 360) / 22.5)) % 16;
+    return WIND_LABELS[idx];
+  }
+  function compassArrowSVG(deg){
+    var rot = (deg == null || isNaN(deg)) ? 0 : deg;
+    return '<svg class="wind-arrow" style="transform:rotate('+rot+'deg)" width="14" height="14" viewBox="0 0 24 24" fill="none">' +
+      '<path d="M12 2l6 14-6-3.5L6 16z" fill="#8fd3ff"/></svg>';
+  }
+  function fmtPressure(hpa){
+    if(hpa == null) return '—';
+    return Math.round(hpa) + ' hPa';
+  }
+  function fmtVisibility(m){
+    if(m == null) return '—';
+    var km = m/1000;
+    if(km >= 10) return '10+ km';
+    return (Math.round(km*10)/10) + ' km';
+  }
+
+  // ================= animated background =================
+  var bgState = null;
+  function clearBg(){ els.bgLayer.innerHTML=''; els.bgLayer.className=''; }
+
+  var THEME_MAP = {
+    'sun':'sun', 'sun-cloud':'sun', 'cloud':'cloud', 'fog':'fog',
+    'drizzle':'rain', 'rain':'rain', 'snow':'snow', 'storm':'storm'
+  };
+  var STAR_COLORS = ['#ffffff','#ffffff','#D9CFE8','#F2E2BA'];
+
+  function renderBackground(iconKind, isDay){
+    if (bgState === iconKind + (isDay?'d':'n')) return;
+    bgState = iconKind + (isDay?'d':'n');
+    clearBg();
+
+    els.body.classList.remove('weather-sun','weather-cloud','weather-rain','weather-snow','weather-storm','weather-fog','time-night');
+    if(!isDay){
+      els.body.classList.add('time-night');
+    } else {
+      els.body.classList.add('weather-'+(THEME_MAP[iconKind] || 'cloud'));
+    }
+
+    if(!isDay){
+      for(var i=0;i<70;i++){
+        var st = document.createElement('div');
+        st.className='star';
+        st.style.left = Math.random()*100+'%';
+        st.style.top = Math.random()*70+'%';
+        st.style.color = STAR_COLORS[Math.floor(Math.random()*STAR_COLORS.length)];
+        st.style.background = 'currentColor';
+        st.style.animationDelay = (Math.random()*4)+'s';
+        st.style.animationDuration = (2.5+Math.random()*3)+'s';
+        els.bgLayer.appendChild(st);
+      }
+      for(var sh=0; sh<2; sh++){
+        var shoot = document.createElement('div');
+        shoot.className='shooting-star';
+        shoot.style.top = (10+Math.random()*30)+'%';
+        shoot.style.right = (5+Math.random()*20)+'%';
+        shoot.style.animationDelay = (sh*4 + Math.random()*3)+'s';
+        els.bgLayer.appendChild(shoot);
+      }
+      var moon = document.createElement('div');
+      moon.className='moon';
+      els.bgLayer.appendChild(moon);
+    } else if(iconKind==='sun' || iconKind==='sun-cloud'){
+      var sun = document.createElement('div');
+      sun.className='sun';
+      els.bgLayer.appendChild(sun);
+    }
+
+    var cloudCount = 0;
+    if(iconKind==='cloud') cloudCount = 6;
+    else if(iconKind==='sun-cloud') cloudCount = 3;
+    else if(['rain','drizzle','storm','snow','fog'].indexOf(iconKind)>=0) cloudCount = 5;
+
+    for(var c=0;c<cloudCount;c++){
+      var cl = document.createElement('div');
+      cl.className='cloud';
+      var w = 90+Math.random()*130;
+      var h = w*0.42;
+      cl.style.width=w+'px';
+      cl.style.height=h+'px';
+      cl.style.top=(5+Math.random()*35)+'%';
+      cl.style.opacity = 0.35+Math.random()*0.35;
+      var dur = 40+Math.random()*40;
+      cl.style.animationDuration=dur+'s';
+      cl.style.animationDelay=(-Math.random()*dur)+'s';
+      els.bgLayer.appendChild(cl);
+      cl.style.boxShadow =
+        (w*0.28)+'px '+(-h*0.32)+'px 0 '+(h*0.05)+'px rgba(255,255,255,0.5), ' +
+        (w*0.55)+'px '+(-h*0.12)+'px 0 '+(-h*0.05)+'px rgba(255,255,255,0.45)';
+    }
+
+    if(['rain','drizzle','storm'].indexOf(iconKind)>=0){
+      var dropCount = iconKind==='drizzle' ? 40 : 90;
+      for(var r=0;r<dropCount;r++){
+        var d = document.createElement('div');
+        d.className='raindrop';
+        d.style.left = Math.random()*100+'%';
+        d.style.height = (10+Math.random()*14)+'px';
+        var dur2 = 0.5+Math.random()*0.6;
+        d.style.animationDuration = dur2+'s';
+        d.style.animationDelay = (-Math.random()*dur2)+'s';
+        els.bgLayer.appendChild(d);
+      }
+    }
+
+    if(iconKind==='snow'){
+      for(var s2=0;s2<60;s2++){
+        var fl = document.createElement('div');
+        fl.className='snowflake';
+        fl.textContent='❄';
+        fl.style.left = Math.random()*100+'%';
+        fl.style.fontSize = (8+Math.random()*10)+'px';
+        var dur3 = 6+Math.random()*8;
+        fl.style.animationDuration = dur3+'s';
+        fl.style.animationDelay = (-Math.random()*dur3)+'s';
+        els.bgLayer.appendChild(fl);
+      }
+    }
+
+    if(iconKind==='fog'){
+      for(var f=0;f<4;f++){
+        var fb = document.createElement('div');
+        fb.className='fogband';
+        fb.style.top=(20+f*15)+'%';
+        fb.style.animationDuration=(10+f*3)+'s';
+        els.bgLayer.appendChild(fb);
+      }
+    }
+
+    if(iconKind==='storm'){
+      var flash = document.createElement('div');
+      flash.className='bolt flash';
+      els.bgLayer.appendChild(flash);
+    }
+  }
+
+  // ================= network =================
+  function geocodeSearch(name){
+    var url = 'https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(name) + '&count=6&language=tr&format=json';
+    return fetch(url).then(function(r){
+      if(!r.ok) throw new Error('geocoding-failed ('+r.status+')');
+      return r.json();
+    }).then(function(data){ return data.results || []; });
+  }
+
+  function fetchForecast(lat, lon){
+    var url = 'https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+
+      '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure,cloud_cover,is_day'+
+      '&hourly=temperature_2m,weather_code,is_day,precipitation_probability,visibility'+
+      '&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max'+
+      '&timezone=auto&forecast_days=7';
+    return fetch(url).then(function(r){
+      if(!r.ok) throw new Error('forecast-failed ('+r.status+')');
+      return r.json();
+    });
+  }
+
+  function fetchAirQuality(lat, lon){
+    var url = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude='+lat+'&longitude='+lon+
+      '&current=european_aqi,pm2_5,pm10&timezone=auto';
+    return fetch(url).then(function(r){
+      if(!r.ok) throw new Error('aqi-failed');
+      return r.json();
+    });
+  }
+
+  function reverseGeocodeName(lat, lon){
+    var url = 'https://api.bigdatacloud.net/data/reverse-geocode-client?latitude='+lat+'&longitude='+lon+'&localityLanguage=tr';
+    return fetch(url).then(function(r){
+      if(!r.ok) throw new Error('reverse-geocode-failed');
+      return r.json();
+    }).then(function(d){
+      return {
+        name: d.city || d.locality || d.principalSubdivision || 'Konumum',
+        admin1: d.principalSubdivision || '',
+        country: d.countryName || ''
+      };
+    }).catch(function(){
+      return { name:'Konumum', admin1:'', country:'' };
+    });
+  }
+
+  function showStatus(html, isError){
+    var retry = isError ? '<div><button class="retry-btn" id="retryBtn">Tekrar dene</button></div>' : '';
+    els.app.innerHTML = '<div class="status'+(isError?' error':'')+'">' + html + retry + '</div>';
+    var retryBtn = document.getElementById('retryBtn');
+    if(retryBtn){
+      retryBtn.addEventListener('click', function(){
+        if(currentPlace) loadCity(currentPlace);
+      });
+    }
+  }
+
+  function showSkeleton(){
+    els.app.innerHTML =
+      '<div class="skeleton">' +
+      '<div class="card skel-block skel-current"></div>' +
+      '<div class="skel-row"><div class="skel-block"></div><div class="skel-block"></div><div class="skel-block"></div><div class="skel-block"></div></div>' +
+      '<div class="card skel-block skel-tall"></div>' +
+      '<div class="skel-row"><div class="skel-block"></div><div class="skel-block"></div><div class="skel-block"></div></div>' +
+      '</div>';
+  }
+
+  var isFramed = (function(){ try{ return window.self !== window.top; }catch(e){ return true; } })();
+
+  function networkHint(err){
+    var msg = 'Hava durumu verileri alınamadı.';
+    if(isFramed){
+      msg += ' Bu sayfa şu an bir önizleme penceresi içinde açık görünüyor — bu tür önizlemeler genelde dış sunuculara bağlantıya izin vermez. ' +
+             'Dosyayı indirip doğrudan bir tarayıcıda (Chrome, Edge, Safari vb.) açmayı deneyin.';
+    } else {
+      msg += ' İnternet bağlantınızı kontrol edin ya da farklı bir tarayıcıda tekrar deneyin.';
+    }
+    if(err && err.message){
+      msg += '<br><span style="font-size:0.78rem;opacity:0.7;">Teknik ayrıntı: '+esc(err.message)+'</span>';
+    }
+    return msg;
+  }
+
+  var currentPlace = null;
+  var currentData = null;
+  var currentAqi = null;
+  var lastUpdated = null;
+
+  function loadCity(place){
+    currentPlace = place;
+    showSkeleton();
+    fetchForecast(place.latitude, place.longitude).then(function(data){
+      currentData = data;
+      lastUpdated = new Date();
+      renderWeather(place, data);
+      renderFavorites();
+      pushRecent(place);
+      fetchAirQuality(place.latitude, place.longitude).then(function(aqiData){
+        currentAqi = aqiData;
+        updateAqiTile(aqiData);
+      }).catch(function(){ /* AQI opsiyonel; sessizce yok say */ });
+    }).catch(function(err){
+      showStatus(networkHint(err), true);
+    });
+  }
+
+  function refreshCurrent(btn){
+    if(!currentPlace) return;
+    if(btn) btn.classList.add('spinning');
+    fetchForecast(currentPlace.latitude, currentPlace.longitude).then(function(data){
+      currentData = data;
+      lastUpdated = new Date();
+      renderWeather(currentPlace, data);
+      if(currentAqi) updateAqiTile(currentAqi);
+      fetchAirQuality(currentPlace.latitude, currentPlace.longitude).then(function(aqiData){
+        currentAqi = aqiData;
+        updateAqiTile(aqiData);
+      }).catch(function(){});
+    }).catch(function(err){
+      showStatus(networkHint(err), true);
+    });
+  }
+
+  // ================= AQI helpers =================
+  function aqiCategory(v){
+    if(v == null) return {label:'—', color:'var(--ink-dim)'};
+    if(v <= 20) return {label:'İyi', color:'var(--good)'};
+    if(v <= 40) return {label:'Orta', color:'#a3e635'};
+    if(v <= 60) return {label:'Hassas gruplar için sağlıksız', color:'var(--warn)'};
+    if(v <= 80) return {label:'Sağlıksız', color:'var(--serious)'};
+    if(v <= 100) return {label:'Çok sağlıksız', color:'var(--critical)'};
+    return {label:'Tehlikeli', color:'#c084fc'};
+  }
+
+  function updateAqiTile(aqiData){
+    var el = document.getElementById('aqiTile');
+    if(!el || !aqiData || !aqiData.current) return;
+    var v = aqiData.current.european_aqi;
+    var cat = aqiCategory(v);
+    el.innerHTML =
+      '<div class="info-value"><span class="aqi-dot" style="background:'+cat.color+'"></span>' +
+      (v!=null ? Math.round(v) : '—') + ' · ' + esc(cat.label) + '</div>';
+  }
+
+  // ================= hourly chart =================
+  var chartData = null; // {times:[], temps:[]}
+
+  function niceStep(range){
+    if(range <= 10) return 2;
+    if(range <= 20) return 5;
+    return 10;
+  }
+
+  function buildChartSVG(times, temps){
+    var n = temps.length;
+    var W = 640, H = 190, mL = 30, mR = 8, mT = 16, mB = 26;
+    var plotW = W - mL - mR, plotH = H - mT - mB;
+
+    var rawMin = Math.min.apply(null, temps);
+    var rawMax = Math.max.apply(null, temps);
+    var step = niceStep(rawMax - rawMin || 1);
+    var niceMin = Math.floor(rawMin / step) * step;
+    var niceMax = Math.ceil(rawMax / step) * step;
+    if(niceMax === niceMin) niceMax = niceMin + step;
+
+    function xFor(i){ return mL + (n===1?0:(i/(n-1))*plotW); }
+    function yFor(t){ return mT + (1 - (t - niceMin)/(niceMax - niceMin)) * plotH; }
+
+    var pts = [];
+    for(var i=0;i<n;i++){ pts.push([xFor(i), yFor(temps[i])]); }
+
+    var d = 'M' + pts.map(function(p){ return p[0].toFixed(1)+','+p[1].toFixed(1); }).join(' L');
+    var areaD = d + ' L' + pts[n-1][0].toFixed(1) + ',' + (mT+plotH) + ' L' + pts[0][0].toFixed(1) + ',' + (mT+plotH) + ' Z';
+
+    // gridlines: min, mid, max
+    var gridVals = [niceMin, (niceMin+niceMax)/2, niceMax];
+    var gridSvg = gridVals.map(function(v){
+      var y = yFor(v);
+      return '<line x1="'+mL+'" y1="'+y.toFixed(1)+'" x2="'+(W-mR)+'" y2="'+y.toFixed(1)+'" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>' +
+             '<text x="2" y="'+(y+3).toFixed(1)+'" font-size="9" fill="rgba(234,243,255,0.55)">'+fmtTemp(v)+'</text>';
+    }).join('');
+
+    // x labels every 3 hours
+    var xLabelStep = Math.max(1, Math.round(n/6));
+    var xSvg = '';
+    for(var j=0;j<n;j+=xLabelStep){
+      var hr = new Date(times[j]).getHours();
+      xSvg += '<text x="'+xFor(j).toFixed(1)+'" y="'+(H-6)+'" font-size="9" text-anchor="middle" fill="rgba(234,243,255,0.55)">'+hr+':00</text>';
+    }
+
+    var gradId = 'chartGrad';
+    var svg = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="180" preserveAspectRatio="none" id="hourlyChartSvg">' +
+      '<defs><linearGradient id="'+gradId+'" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="#8fd3ff" stop-opacity="0.35"/>' +
+      '<stop offset="100%" stop-color="#8fd3ff" stop-opacity="0"/></linearGradient></defs>' +
+      gridSvg +
+      '<path d="'+areaD+'" fill="url(#'+gradId+')" stroke="none"/>' +
+      '<path d="'+d+'" fill="none" stroke="#8fd3ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+      xSvg +
+      '<line id="chartCrosshair" x1="'+pts[0][0]+'" y1="'+mT+'" x2="'+pts[0][0]+'" y2="'+(mT+plotH)+'" stroke="rgba(255,255,255,0.35)" stroke-width="1" style="display:none"/>' +
+      '<circle id="chartHoverDot" cx="'+pts[0][0]+'" cy="'+pts[0][1]+'" r="4" fill="#8fd3ff" stroke="#0c1e3d" stroke-width="2" style="display:none"/>' +
+      '<rect id="chartHitLayer" x="'+mL+'" y="0" width="'+plotW+'" height="'+H+'" fill="transparent"/>' +
+      '</svg>';
+
+    return { svg: svg, meta:{W:W,H:H,mL:mL,mR:mR,plotW:plotW,pts:pts} };
+  }
+
+  function initChartInteraction(meta, times, temps){
+    var svgEl = document.getElementById('hourlyChartSvg');
+    var hit = document.getElementById('chartHitLayer');
+    var crosshair = document.getElementById('chartCrosshair');
+    var dot = document.getElementById('chartHoverDot');
+    var tooltip = document.getElementById('chartTooltip');
+    var wrap = document.getElementById('chartWrap');
+    if(!svgEl || !hit) return;
+
+    function handleMove(clientX){
+      var rect = svgEl.getBoundingClientRect();
+      var relX = clientX - rect.left;
+      var scale = meta.W / rect.width;
+      var vbX = relX * scale;
+      // find nearest point index
+      var n = meta.pts.length;
+      var idx = Math.round(((vbX - meta.mL) / meta.plotW) * (n-1));
+      idx = Math.max(0, Math.min(n-1, idx));
+      var p = meta.pts[idx];
+
+      crosshair.setAttribute('x1', p[0]); crosshair.setAttribute('x2', p[0]);
+      crosshair.style.display = 'block';
+      dot.setAttribute('cx', p[0]); dot.setAttribute('cy', p[1]);
+      dot.style.display = 'block';
+
+      var pxRatio = rect.width / meta.W;
+      var tooltipLeft = p[0]*pxRatio;
+      var tooltipTop = p[1]*(rect.height/meta.H);
+      tooltip.style.left = tooltipLeft + 'px';
+      tooltip.style.top = tooltipTop + 'px';
+      var hr = new Date(times[idx]).getHours();
+      tooltip.innerHTML = '<div class="tt-val">'+fmtTemp(temps[idx])+'</div><div class="tt-lbl">'+hr+':00</div>';
+      tooltip.classList.add('visible');
+    }
+    function handleLeave(){
+      crosshair.style.display='none';
+      dot.style.display='none';
+      tooltip.classList.remove('visible');
+    }
+
+    hit.addEventListener('mousemove', function(e){ handleMove(e.clientX); });
+    hit.addEventListener('mouseleave', handleLeave);
+    hit.addEventListener('touchstart', function(e){ if(e.touches[0]) handleMove(e.touches[0].clientX); }, {passive:true});
+    hit.addEventListener('touchmove', function(e){ if(e.touches[0]) handleMove(e.touches[0].clientX); }, {passive:true});
+    hit.addEventListener('touchend', handleLeave);
+    // initial state: highlight first point ("now")
+    handleMove(svgEl.getBoundingClientRect().left + 1);
+  }
+
+  // ================= live date/time card =================
+  var FULL_MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  var dtInterval = null;
+  function startDateTimeClock(){
+    if(dtInterval){ clearInterval(dtInterval); dtInterval = null; }
+    function tick(){
+      var timeEl = document.getElementById('dtTime');
+      var dateEl = document.getElementById('dtDate');
+      if(!timeEl || !dateEl){ clearInterval(dtInterval); dtInterval = null; return; }
+      var now = new Date();
+      var hh = String(now.getHours()).padStart(2,'0');
+      var mm = String(now.getMinutes()).padStart(2,'0');
+      timeEl.textContent = hh+':'+mm;
+      dateEl.textContent = DAY_NAMES[now.getDay()]+', '+now.getDate()+' '+FULL_MONTHS[now.getMonth()]+' '+now.getFullYear();
+    }
+    tick();
+    dtInterval = setInterval(tick, 1000);
+  }
+  function buildDateTimeCard(){
+    return '<div class="card datetime-card">' +
+      '  <div class="dt-time" id="dtTime">--:--</div>' +
+      '  <div class="dt-date" id="dtDate">—</div>' +
+      '</div>';
+  }
+
+  // ================= main render =================
+  function fmtClock(iso){
+    if(!iso) return '—';
+    var d = new Date(iso);
+    var hh = String(d.getHours()).padStart(2,'0');
+    var mm = String(d.getMinutes()).padStart(2,'0');
+    return hh+':'+mm;
+  }
+  function fmtUpdated(d){
+    if(!d) return '';
+    var hh = String(d.getHours()).padStart(2,'0');
+    var mm = String(d.getMinutes()).padStart(2,'0');
+    return 'Güncellendi: '+hh+':'+mm;
+  }
+  var fadeIdx = 0;
+  function fadeWrap(html){
+    var delay = fadeIdx * 70;
+    fadeIdx++;
+    return '<div class="fade-up" style="animation-delay:'+delay+'ms">'+html+'</div>';
+  }
+
+  function renderWeather(place, data){
+    fadeIdx = 0;
+    var cur = data.current;
+    var info = wmoInfo(cur.weather_code);
+    var isDay = cur.is_day === 1;
+    var curIcon = resolveIcon(info.icon, cur.is_day);
+
+    renderBackground(curIcon, isDay);
+
+    var regionParts = [];
+    if(place.admin1 && place.admin1 !== place.name) regionParts.push(place.admin1);
+    if(place.country) regionParts.push(place.country);
+    var region = regionParts.join(', ');
+
+    var html = '';
+
+    var curBlock = '';
+    curBlock += '<div class="card current">';
+    curBlock += '  <div class="current-top">';
+    curBlock += '    <div class="updated-text">'+fmtUpdated(lastUpdated)+'</div>';
+    curBlock += '    <button class="icon-btn refresh-btn" id="refreshBtn" aria-label="Yenile" title="Yenile"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 4v6h6M20 20v-6h-6M5 15a7 7 0 0 0 12.9 2.6M19 9A7 7 0 0 0 6.1 6.4" stroke="#eaf3ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+    curBlock += '  </div>';
+    curBlock += '  <div class="place-block">';
+    curBlock += '    <div class="place">'+esc(place.name)+(region?'<small>'+esc(region)+'</small>':'')+'</div>';
+    curBlock += '  </div>';
+    curBlock += '  <div class="temp-block">';
+    curBlock += '    <div class="weather-icon ic-'+curIcon+'">'+iconSVG(curIcon,72)+'</div>';
+    curBlock += '    <div>';
+    curBlock += '      <div class="temp-big">'+fmtTemp(cur.temperature_2m)+'</div>';
+    curBlock += '      <div class="desc">'+esc(info.tr)+' · Hissedilen '+fmtTemp(cur.apparent_temperature)+'</div>';
+    curBlock += '    </div>';
+    curBlock += '  </div>';
+    curBlock += '  <div class="meta-row">';
+    curBlock += '    <div class="meta-item"><div class="val">'+Math.round(cur.relative_humidity_2m)+'%</div><div class="lbl">Nem</div></div>';
+    curBlock += '    <div class="meta-item"><div class="val wind-val">'+compassArrowSVG(cur.wind_direction_10m)+' '+fmtWind(cur.wind_speed_10m)+'</div><div class="lbl">Rüzgar '+windDirLabel(cur.wind_direction_10m)+'</div></div>';
+    curBlock += '  </div>';
+    curBlock += '</div>';
+    html += fadeWrap(curBlock);
+
+    // live date/time card
+    html += fadeWrap(buildDateTimeCard());
+
+    // details info grid
+    var uv = data.daily.uv_index_max ? data.daily.uv_index_max[0] : null;
+    var nowIso = data.current.time;
+    var startIdx = data.hourly.time.indexOf(nowIso);
+    if(startIdx < 0) startIdx = 0;
+    var precipNow = data.hourly.precipitation_probability ? data.hourly.precipitation_probability[startIdx] : null;
+    var visNow = data.hourly.visibility ? data.hourly.visibility[startIdx] : null;
+
+    var gridBlock = '';
+    gridBlock += '<div class="info-grid" style="margin-top:14px;">';
+    gridBlock += '  <div class="card info-tile"><div style="width:30px;text-align:center;font-size:1.3rem;">☀️</div><div><div class="info-label">UV İndeksi</div><div class="info-value">'+(uv!=null?Math.round(uv*10)/10:'—')+'</div></div></div>';
+    gridBlock += '  <div class="card info-tile" id="aqiTile"><div><div class="info-label">Hava Kalitesi</div><div class="info-value">Yükleniyor…</div></div></div>';
+    gridBlock += '  <div class="card info-tile"><div style="width:30px;text-align:center;font-size:1.3rem;">💧</div><div><div class="info-label">Yağış İhtimali</div><div class="info-value">'+(precipNow!=null?Math.round(precipNow)+'%':'—')+'</div></div></div>';
+    gridBlock += '  <div class="card info-tile"><div style="width:30px;text-align:center;font-size:1.3rem;">☁️</div><div><div class="info-label">Bulutluluk</div><div class="info-value">'+(cur.cloud_cover!=null?Math.round(cur.cloud_cover)+'%':'—')+'</div></div></div>';
+    gridBlock += '  <div class="card info-tile"><div style="width:30px;text-align:center;font-size:1.3rem;">🧭</div><div><div class="info-label">Basınç</div><div class="info-value">'+fmtPressure(cur.surface_pressure)+'</div></div></div>';
+    gridBlock += '  <div class="card info-tile"><div style="width:30px;text-align:center;font-size:1.3rem;">👁️</div><div><div class="info-label">Görüş Mesafesi</div><div class="info-value">'+fmtVisibility(visNow)+'</div></div></div>';
+    gridBlock += '</div>';
+    html += fadeWrap(gridBlock);
+
+    // daily (7-day forecast) — shown before the hourly chart
+    var dailyBlock = '<div class="section-title">7 Günlük Tahmin</div><div class="card daily">';
+    var dayCount = Math.min(7, data.daily.time.length);
+    for(var d=0; d<dayCount; d++){
+      var dDate = new Date(data.daily.time[d] + 'T12:00:00');
+      var dInfo = wmoInfo(data.daily.weather_code[d]);
+      var dayLabel = d===0 ? 'Bugün' : DAY_NAMES[dDate.getDay()];
+      var dateLabel = dDate.getDate()+' '+MONTHS[dDate.getMonth()];
+      var lo = data.daily.temperature_2m_min[d];
+      var hi = data.daily.temperature_2m_max[d];
+      dailyBlock += '<div class="day-item">';
+      dailyBlock += '  <div class="d-name">'+dayLabel+'<small>'+dateLabel+'</small></div>';
+      dailyBlock += '  <div class="d-icon ic-'+dInfo.icon+'">'+iconSVG(dInfo.icon,28)+'</div>';
+      dailyBlock += '  <div class="d-temps"><span class="lo">'+fmtTemp(lo)+'</span>'+fmtTemp(hi)+'</div>';
+      dailyBlock += '</div>';
+    }
+    dailyBlock += '</div>';
+    html += fadeWrap(dailyBlock);
+
+    // ad slot (in-feed)
+    html += '<div class="ad-slot ad-infeed" id="ad-slot-infeed"><!-- AdSense onayı sonrası buraya <ins class="adsbygoogle">...</ins> kodunu yapıştırın -->Reklam Alanı</div>';
+
+    // hourly temperature chart
+    var endIdx = Math.min(startIdx + 24, data.hourly.time.length);
+    var chartTimes = data.hourly.time.slice(startIdx, endIdx);
+    var chartTemps = data.hourly.temperature_2m.slice(startIdx, endIdx);
+    var built = buildChartSVG(chartTimes, chartTemps);
+    var chartBlock = '<div class="section-title">Saatlik Sıcaklık</div>' +
+      '<div class="card chart-card"><div class="chart-wrap" id="chartWrap">'+built.svg+'<div class="chart-tooltip" id="chartTooltip"></div></div></div>';
+    html += fadeWrap(chartBlock);
+
+    // hourly (icons strip)
+    var hourlyBlock = '<div class="section-title">Saatlik Tahmin</div><div class="card hourly">';
+    for(var i=startIdx; i<endIdx; i+=1){
+      var hTime = new Date(data.hourly.time[i]);
+      var hInfo = wmoInfo(data.hourly.weather_code[i]);
+      var hIcon = resolveIcon(hInfo.icon, data.hourly.is_day ? data.hourly.is_day[i] : 1);
+      var label = (i===startIdx) ? 'Şimdi' : hTime.getHours()+':00';
+      var hPrecip = data.hourly.precipitation_probability ? data.hourly.precipitation_probability[i] : null;
+      hourlyBlock += '<div class="hour-item">';
+      hourlyBlock += '  <div class="h-time">'+label+'</div>';
+      hourlyBlock += '  <div class="h-icon ic-'+hIcon+'">'+iconSVG(hIcon,32)+'</div>';
+      hourlyBlock += '  <div class="h-temp">'+fmtTemp(data.hourly.temperature_2m[i])+'</div>';
+      if(hPrecip != null && hPrecip >= 20){
+        hourlyBlock += '  <div style="font-size:0.68rem;color:#8fd3ff;margin-top:2px;">💧'+Math.round(hPrecip)+'%</div>';
+      }
+      hourlyBlock += '</div>';
+    }
+    hourlyBlock += '</div>';
+    html += fadeWrap(hourlyBlock);
+
+    els.app.innerHTML = html;
+
+    initChartInteraction(built.meta, chartTimes, chartTemps);
+    if(currentAqi) updateAqiTile(currentAqi);
+    startDateTimeClock();
+    var refreshBtn = document.getElementById('refreshBtn');
+    if(refreshBtn){
+      refreshBtn.addEventListener('click', function(){ refreshCurrent(refreshBtn); });
+    }
+  }
+
+  // ================= favorites UI =================
+  function renderFavorites(){
+    var html = '';
+    var activeKey = currentPlace ? placeKey(currentPlace) : null;
+    favorites.forEach(function(f){
+      var active = placeKey(f) === activeKey;
+      html += '<div class="fav-chip'+(active?' active':'')+'" data-key="'+esc(placeKey(f))+'">' +
+        '<span class="fav-name">'+esc(f.name)+'</span>' +
+        '<span class="fav-remove" data-remove="'+esc(placeKey(f))+'">✕</span></div>';
+    });
+    var alreadyFav = currentPlace && favorites.some(function(f){ return placeKey(f)===activeKey; });
+    html += '<button class="fav-add" id="favAddBtn" '+(alreadyFav?'disabled':'')+'>' +
+      (alreadyFav ? '★ Favoride' : '☆ Favorilere ekle') + '</button>';
+    els.favorites.innerHTML = html;
+
+    Array.prototype.forEach.call(els.favorites.querySelectorAll('.fav-chip'), function(chip){
+      chip.addEventListener('click', function(e){
+        if(e.target.hasAttribute('data-remove')) return;
+        var key = chip.getAttribute('data-key');
+        var place = favorites.find(function(f){ return placeKey(f)===key; });
+        if(place) loadCity(place);
+      });
+    });
+    Array.prototype.forEach.call(els.favorites.querySelectorAll('[data-remove]'), function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var key = btn.getAttribute('data-remove');
+        favorites = favorites.filter(function(f){ return placeKey(f)!==key; });
+        saveFavorites(favorites);
+        renderFavorites();
+      });
+    });
+    var addBtn = document.getElementById('favAddBtn');
+    if(addBtn){
+      addBtn.addEventListener('click', function(){
+        if(!currentPlace || addBtn.hasAttribute('disabled')) return;
+        favorites.push(currentPlace);
+        saveFavorites(favorites);
+        renderFavorites();
+      });
+    }
+  }
+
+  // ================= search UI =================
+  function showRecentSuggestions(){
+    if(!recentSearches.length){ els.suggestions.classList.remove('open'); els.suggestions.innerHTML=''; return; }
+    els.suggestions.innerHTML = '<div class="sugg-heading">Son Aramalar</div>' + recentSearches.map(function(r, idx){
+      var region = [r.admin1, r.country].filter(function(x){return x && x!==r.name;}).join(', ');
+      return '<div class="sugg-item" data-idx="'+idx+'">🕑 '+esc(r.name)+(region?' <span style="color:var(--ink-dim);font-size:0.82em;">— '+esc(region)+'</span>':'')+'</div>';
+    }).join('');
+    els.suggestions.classList.add('open');
+    els.suggestions._results = recentSearches;
+  }
+  els.input.addEventListener('focus', function(){
+    if(els.input.value.trim().length < 2) showRecentSuggestions();
+  });
+
+  var searchTimer = null;
+  els.input.addEventListener('input', function(){
+    var q = els.input.value.trim();
+    clearTimeout(searchTimer);
+    if(q.length < 2){ showRecentSuggestions(); return; }
+    searchTimer = setTimeout(function(){
+      geocodeSearch(q).then(function(results){
+        if(!results.length){ els.suggestions.classList.remove('open'); return; }
+        els.suggestions.innerHTML = results.map(function(r, idx){
+          var region = [r.admin1, r.country].filter(function(x){return x && x!==r.name;}).join(', ');
+          return '<div data-idx="'+idx+'">'+esc(r.name)+(region?' <span style="color:var(--ink-dim);font-size:0.82em;">— '+esc(region)+'</span>':'')+'</div>';
+        }).join('');
+        els.suggestions.classList.add('open');
+        els.suggestions._results = results;
+      }).catch(function(){});
+    }, 350);
+  });
+
+  els.suggestions.addEventListener('click', function(e){
+    var target = e.target.closest('[data-idx]');
+    if(!target) return;
+    var idx = parseInt(target.getAttribute('data-idx'), 10);
+    var results = els.suggestions._results || [];
+    var place = results[idx];
+    if(place){
+      els.input.value = place.name;
+      els.suggestions.classList.remove('open');
+      loadCity(place);
+    }
+  });
+
+  document.addEventListener('click', function(e){
+    if(!els.suggestions.contains(e.target) && e.target !== els.input){
+      els.suggestions.classList.remove('open');
+    }
+    if(!els.menuDropdown.contains(e.target) && e.target !== els.menuBtn && !els.menuBtn.contains(e.target)){
+      els.menuDropdown.classList.remove('open');
+      els.menuBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  els.menuBtn.addEventListener('click', function(e){
+    e.stopPropagation();
+    var isOpen = els.menuDropdown.classList.toggle('open');
+    els.menuBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  });
+
+  function doSearch(){
+    var q = els.input.value.trim();
+    if(!q) return;
+    showStatus('<div class="spinner"></div><div>Aranıyor…</div>');
+    geocodeSearch(q).then(function(results){
+      if(!results.length){
+        showStatus('"'+esc(q)+'" için bir şehir bulunamadı. Farklı bir isim deneyin.', true);
+        return;
+      }
+      els.suggestions.classList.remove('open');
+      loadCity(results[0]);
+    }).catch(function(err){
+      showStatus(networkHint(err), true);
+    });
+  }
+
+  els.searchBtn.addEventListener('click', doSearch);
+  els.input.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); doSearch(); }
+  });
+
+  // ================= geolocation =================
+  els.geoBtn.addEventListener('click', function(){
+    if(!navigator.geolocation){
+      showStatus('Bu tarayıcı konum özelliğini desteklemiyor.', true);
+      return;
+    }
+    els.geoBtn.classList.add('loading');
+    navigator.geolocation.getCurrentPosition(function(pos){
+      var lat = pos.coords.latitude, lon = pos.coords.longitude;
+      reverseGeocodeName(lat, lon).then(function(info){
+        els.geoBtn.classList.remove('loading');
+        loadCity({ name: info.name, admin1: info.admin1, country: info.country, latitude: lat, longitude: lon });
+      });
+    }, function(err){
+      els.geoBtn.classList.remove('loading');
+      showStatus('Konum bilgisi alınamadı. Tarayıcı ayarlarından konum iznini kontrol edin.', true);
+    }, { timeout: 10000 });
+  });
+
+  // ================= unit toggle =================
+  Array.prototype.forEach.call(els.unitToggle.querySelectorAll('button'), function(btn){
+    btn.addEventListener('click', function(){
+      var unit = btn.getAttribute('data-unit');
+      if(unit === prefs.unit) return;
+      prefs.unit = unit;
+      savePrefs(prefs);
+      Array.prototype.forEach.call(els.unitToggle.querySelectorAll('button'), function(b){
+        b.classList.toggle('active', b === btn);
+      });
+      if(currentPlace && currentData){
+        renderWeather(currentPlace, currentData);
+        if(currentAqi) updateAqiTile(currentAqi);
+      }
+    });
+  });
+  (function initUnitButtons(){
+    Array.prototype.forEach.call(els.unitToggle.querySelectorAll('button'), function(b){
+      b.classList.toggle('active', b.getAttribute('data-unit') === prefs.unit);
+    });
+  })();
+
+  // ================= framed-preview banner =================
+  if(isFramed){
+    var banner = document.createElement('div');
+    banner.className = 'top-banner';
+    banner.innerHTML = 'Bu sayfa bir önizleme penceresi içinde açık görünüyor. Hava durumu verileri gelmezse, dosyaları indirip kendi barındırmanızda (hosting) açmayı deneyin.';
+    els.app.parentNode.insertBefore(banner, els.app);
+  }
+
+  // ================= PWA: service worker + install prompt =================
+  if('serviceWorker' in navigator && !isFramed){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('sw.js').catch(function(){ /* sessizce yok say */ });
+    });
+  }
+
+  var deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    els.installBanner.classList.add('show');
+  });
+  els.installBtn.addEventListener('click', function(){
+    if(!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.finally(function(){
+      deferredInstallPrompt = null;
+      els.installBanner.classList.remove('show');
+    });
+  });
+  els.installDismiss.addEventListener('click', function(){
+    els.installBanner.classList.remove('show');
+  });
+
+  // ================= initial load =================
+  renderFavorites();
+  var defaultPlace = { name:'İstanbul', admin1:'İstanbul', country:'Türkiye', latitude:41.0082, longitude:28.9784 };
+  loadCity(defaultPlace);
+
+})();
+</script>
+</body>
+</html>

@@ -1445,6 +1445,22 @@
     return '<div class="fade-up" style="animation-delay:'+delay+'ms">'+html+'</div>';
   }
 
+  function findCurrentHourIndex(times, nowIso){
+    if(!times || !times.length) return 0;
+    if(nowIso){
+      var hourKey = String(nowIso).slice(0,13) + ':00'; // "YYYY-MM-DDTHH:00"
+      var exact = times.indexOf(hourKey);
+      if(exact >= 0) return exact;
+      // yedek: şu andan önceki/eşit son saatlik kayıt (ISO metinleri sıralı karşılaştırılabilir)
+      var idx = 0;
+      for(var k=0; k<times.length; k++){
+        if(times[k] <= nowIso) idx = k; else break;
+      }
+      return idx;
+    }
+    return 0;
+  }
+
   function renderWeather(place, data){
     fadeIdx = 0;
     var cur = data.current;
@@ -1489,9 +1505,11 @@
 
     // details info grid
     var uv = data.daily.uv_index_max ? data.daily.uv_index_max[0] : null;
-    var nowIso = data.current.time;
-    var startIdx = data.hourly.time.indexOf(nowIso);
-    if(startIdx < 0) startIdx = 0;
+    // Open-Meteo "current" değerleri 15 dakikalık adımlarla gelir (örn. "2026-10-20T12:15"),
+    // saatlik dizi ise tam saatlerdedir ("2026-10-20T12:00"). Bu yüzden doğrudan indexOf
+    // çoğu zaman -1 döndürür ve veriler gece yarısından (00:00) gösterilirdi.
+    // Şu anki saati içeren saatlik kaydı buluyoruz.
+    var startIdx = findCurrentHourIndex(data.hourly.time, data.current.time);
     var precipNow = data.hourly.precipitation_probability ? data.hourly.precipitation_probability[startIdx] : null;
     var visNow = data.hourly.visibility ? data.hourly.visibility[startIdx] : null;
 
